@@ -776,12 +776,37 @@ function borrarAlu(i) {
         const nombresDias = ["DO", "LU", "MA", "MI", "JU", "VI", "SA"];
 
         // FUNCIONES DE ACCESO
-        function validarAcceso() {
-            if (document.getElementById('pass-input').value === config.pass) {
-                document.getElementById('login-screen').classList.add('hidden');
-                iniciarProgressBar();
-            } else alert("❌ Contraseña incorrecta");
+        async function validarAcceso() {
+    const passInput = document.getElementById('pass-input').value;
+    
+    // Primero revisamos en la nube si existe esa cuenta
+    if (window.db_nube) {
+        try {
+            const docRef = window.doc(window.db_nube, "usuarios", passInput);
+            const docSnap = await window.getDoc(docRef);
+
+            if (docSnap.exists()) {
+                const datosNube = docSnap.data();
+                // Si la nube tiene datos, los cargamos al sistema
+                db = datosNube.datos;
+                config.pass = passInput;
+                localStorage.setItem('sia_total_v7', JSON.stringify(db));
+                alert("¡Bienvenido! Datos sincronizados desde la nube.");
+            }
+        } catch (e) {
+            console.log("Iniciando en modo offline.");
         }
+    }
+
+    // Luego sigue tu lógica normal de validación
+    if (passInput === config.pass) {
+        document.getElementById('login-screen').classList.remove('active');
+        document.getElementById('main-panel').classList.add('active');
+        updateGradoSelect();
+    } else {
+        alert("Contraseña incorrecta");
+    }
+}
 
    function iniciarProgressBar() {
     const splash = document.getElementById('splash-screen');
@@ -1195,7 +1220,26 @@ function guardarAsistencia() {
 }
         
         function cerrarModal() { document.getElementById('modal-alu').classList.add('hidden'); }
-        function save() { localStorage.setItem('sia_total_v7', JSON.stringify(db)); updateGradoSelect(); }
+        async function save() { 
+    // 1. Guardado local (lo que ya tenías)
+    localStorage.setItem('sia_total_v7', JSON.stringify(db)); 
+    updateGradoSelect(); 
+
+    // 2. Sincronización con la Nube (Firebase)
+    // Usamos config.pass que es donde guardas la contraseña maestra
+    if (config.pass && window.db_nube) {
+        try {
+            // "await" hace que el código espere la respuesta de Google
+            await window.setDoc(window.doc(window.db_nube, "usuarios", config.pass), {
+                datos: db,
+                fechaGuardado: Date.now()
+            });
+            console.log("Sincronización exitosa con Firebase");
+        } catch (error) {
+            console.warn("No hay internet, se guardará en la nube automáticamente al conectar.");
+        }
+    }
+}
 
         function cargarFiltrosHistorial() {
             const sAnio = document.getElementById('filtro-anio'), sMes = document.getElementById('filtro-mes');
@@ -1517,3 +1561,4 @@ setTimeout(mostrarRecordatorioRespaldo, 30000);
 </body>
 
 </html>
+
