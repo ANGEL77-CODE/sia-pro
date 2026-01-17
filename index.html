@@ -767,50 +767,43 @@ function borrarAlu(i) {
 }
         const nombresDias = ["DO", "LU", "MA", "MI", "JU", "VI", "SA"];
 
-        // FUNCIONES DE ACCESO
-     async function validarAcceso() {
+   async function validarAcceso() {
     const passInput = document.getElementById('pass-input').value;
-    if (!passInput) return alert("Ingresa una contraseña");
+    if (!passInput) return alert("Por favor, ingresa la contraseña.");
 
-    const loginBtn = document.querySelector('.login-card button');
-    loginBtn.innerText = "Sincronizando...";
-    loginBtn.disabled = true;
+    // 1. Intentar buscar en la Nube (Firebase)
+    if (window.db_nube) {
+        try {
+            const docRef = window.doc(window.db_nube, "usuarios", passInput);
+            const docSnap = await window.getDoc(docRef);
 
-    try {
-        // INTENTAR BUSCAR EN LA NUBE PRIMERO
-        const docRef = window.doc(window.db_nube, "usuarios", passInput);
-        const docSnap = await window.getDoc(docRef);
-
-        if (docSnap.exists()) {
-            // SI EXISTE EN LA NUBE, TRAEMOS LOS DATOS
-            const datosNube = docSnap.data();
-            db = datosNube.datos;
-            config.pass = passInput;
-            // Guardamos localmente para que la próxima vez sea más rápido
-            localStorage.setItem('sia_total_v7', JSON.stringify(db));
-            localStorage.setItem('sia_config_v7', JSON.stringify(config));
-            
-            entrarAlSistema();
-        } else if (passInput === config.pass) {
-            // SI NO ESTÁ EN LA NUBE PERO COINCIDE CON LO LOCAL (PC ORIGINAL)
-            entrarAlSistema();
-        } else {
-            alert("Contraseña incorrecta o no existe en la nube.");
+            if (docSnap.exists()) {
+                const datosNube = docSnap.data();
+                // Si existe en la nube, descargamos todo al celular
+                db = datosNube.datos;
+                config.pass = passInput;
+                
+                // Guardamos en la memoria del celular para que funcione offline después
+                localStorage.setItem('sia_total_v7', JSON.stringify(db));
+                localStorage.setItem('sia_config_v7', JSON.stringify(config));
+                
+                entrarAlSistema();
+                return; // Salimos de la función con éxito
+            }
+        } catch (e) {
+            console.log("Error de conexión, intentando modo local...");
         }
-    } catch (e) {
-        console.error(e);
-        // Si falla el internet, intentar validación local
-        if (passInput === config.pass) {
-            entrarAlSistema();
-        } else {
-            alert("Error de conexión y no hay datos locales.");
-        }
-    } finally {
-        loginBtn.innerText = "Entrar al Sistema";
-        loginBtn.disabled = false;
+    }
+
+    // 2. Si no hay internet o no existe en la nube, revisa el local (PC original)
+    if (passInput === config.pass) {
+        entrarAlSistema();
+    } else {
+        alert("Contraseña incorrecta o no encontrada en la nube.");
     }
 }
 
+// Función auxiliar para limpiar el código
 function entrarAlSistema() {
     document.getElementById('login-screen').classList.remove('active');
     document.getElementById('main-panel').classList.add('active');
@@ -1229,22 +1222,21 @@ function guardarAsistencia() {
 }
         
         function cerrarModal() { document.getElementById('modal-alu').classList.add('hidden'); }
-       async function save() {
-    // Guardar fecha de última modificación para sincronización
-    db.ultimaModificacion = Date.now();
-    
+      async function save() {
+    // Guardado local
     localStorage.setItem('sia_total_v7', JSON.stringify(db));
     updateGradoSelect();
 
+    // Guardado en la Nube (Firebase)
     if (config.pass && window.db_nube) {
         try {
             await window.setDoc(window.doc(window.db_nube, "usuarios", config.pass), {
                 datos: db,
                 fecha: Date.now()
             });
-            console.log("☁️ Sincronizado");
-        } catch (e) {
-            console.error("Error al subir:", e);
+            console.log("Sincronizado con la nube");
+        } catch (error) {
+            console.warn("Error al sincronizar: ", error);
         }
     }
 }
