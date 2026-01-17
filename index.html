@@ -586,7 +586,78 @@ section {
         Recuerda exportar tu respaldo hoy.
     </div>
 </div>
+	<script type="module">
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+  // TUS CLAVES DE FIREBASE (Las que copiaste en el Paso 1)
+  const firebaseConfig = {
+    apiKey: "TU_API_KEY",
+    authDomain: "TU_PROYECTO.firebaseapp.com",
+    projectId: "TU_PROYECTO_ID",
+    storageBucket: "TU_PROYECTO.appspot.com",
+    messagingSenderId: "TU_ID",
+    appId: "TU_APP_ID"
+  };
+
+  // Inicializar Firebase
+  const app = initializeApp(firebaseConfig);
+  const db_nube = getFirestore(app);
+
+  // ACTIVAR MODO OFFLINE (Esto es lo que permite trabajar sin internet)
+  enableIndexedDbPersistence(db_nube).catch((err) => {
+      console.log("Error de persistencia:", err.code);
+  });
+
+  // Hacer las funciones accesibles globalmente
+  window.db_nube = db_nube;
+  window.doc = doc;
+  window.setDoc = setDoc;
+  window.getDoc = getDoc;
+</script>
     <script>
+		// Función para guardar con sincronización
+async function guardarDatosSincronizados() {
+    // 1. Guardar en LocalStorage (como siempre)
+    localStorage.setItem('sia_db', JSON.stringify(db));
+
+    // 2. Intentar subir a la Nube (Firebase)
+    try {
+        const passMatriz = document.getElementById('pass-matriz').value; // Usamos la clave como ID de documento
+        if (!passMatriz) return;
+
+        await setDoc(doc(window.db_nube, "usuarios", passMatriz), {
+            datos: db,
+            ultimaActualizacion: Date.now()
+        });
+        console.log("Sincronizado con la nube");
+    } catch (e) {
+        console.error("Error al sincronizar: ", e);
+        // Si no hay internet, Firebase lo subirá solo cuando vuelva la conexión
+    }
+}
+
+// Función para descargar datos al iniciar sesión
+async function cargarDatosDesdeNube() {
+    const passMatriz = document.getElementById('pass-login').value;
+    const docRef = doc(window.db_nube, "usuarios", passMatriz);
+    const docSnap = await getDoc(docRef);
+
+    if (docSnap.exists()) {
+        const datosNube = docSnap.data();
+        const datosLocales = JSON.parse(localStorage.getItem('sia_db'));
+
+        // Comparar cuál es más reciente
+        if (!datosLocales || datosNube.ultimaActualizacion > (datosLocales.fechaGuardado || 0)) {
+            if (confirm("Se encontraron datos más recientes en la nube. ¿Deseas cargarlos?")) {
+                db = datosNube.datos;
+                localStorage.setItem('sia_db', JSON.stringify(db));
+                actualizarSelectorGrados();
+                alert("Datos actualizados desde la nube.");
+            }
+        }
+    }
+}
 		// --- AL CARGAR LA PÁGINA ---
 window.onload = function() {
     // Verificamos si ya existe una configuración
@@ -1444,4 +1515,5 @@ setTimeout(mostrarRecordatorioRespaldo, 30000);
   }
 </script>
 </body>
+
 </html>
