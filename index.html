@@ -590,30 +590,22 @@ section {
   import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
   import { getFirestore, doc, setDoc, getDoc, enableIndexedDbPersistence } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-  // TUS CLAVES DE FIREBASE (Las que copiaste en el Paso 1)
   const firebaseConfig = {
-    apiKey: "TU_API_KEY",
-    authDomain: "TU_PROYECTO.firebaseapp.com",
-    projectId: "TU_PROYECTO_ID",
-    storageBucket: "TU_PROYECTO.appspot.com",
-    messagingSenderId: "TU_ID",
-    appId: "TU_APP_ID"
+    // TUS CLAVES REALES AQUÍ
   };
 
-  // Inicializar Firebase
   const app = initializeApp(firebaseConfig);
   const db_nube = getFirestore(app);
 
-  // ACTIVAR MODO OFFLINE (Esto es lo que permite trabajar sin internet)
-  enableIndexedDbPersistence(db_nube).catch((err) => {
-      console.log("Error de persistencia:", err.code);
-  });
-
-  // Hacer las funciones accesibles globalmente
+  // EXPORTAR AL OBJETO WINDOW PARA QUE TODO EL HTML LAS VEA
   window.db_nube = db_nube;
   window.doc = doc;
   window.setDoc = setDoc;
   window.getDoc = getDoc;
+
+  enableIndexedDbPersistence(db_nube).catch((err) => {
+      console.error("Error persistencia:", err.code);
+  });
 </script>
     <script>
 		// Función para guardar con sincronización
@@ -776,36 +768,53 @@ function borrarAlu(i) {
         const nombresDias = ["DO", "LU", "MA", "MI", "JU", "VI", "SA"];
 
         // FUNCIONES DE ACCESO
-        async function validarAcceso() {
+     async function validarAcceso() {
     const passInput = document.getElementById('pass-input').value;
-    
-    // Primero revisamos en la nube si existe esa cuenta
-    if (window.db_nube) {
-        try {
-            const docRef = window.doc(window.db_nube, "usuarios", passInput);
-            const docSnap = await window.getDoc(docRef);
+    if (!passInput) return alert("Ingresa una contraseña");
 
-            if (docSnap.exists()) {
-                const datosNube = docSnap.data();
-                // Si la nube tiene datos, los cargamos al sistema
-                db = datosNube.datos;
-                config.pass = passInput;
-                localStorage.setItem('sia_total_v7', JSON.stringify(db));
-                alert("¡Bienvenido! Datos sincronizados desde la nube.");
-            }
-        } catch (e) {
-            console.log("Iniciando en modo offline.");
+    const loginBtn = document.querySelector('.login-card button');
+    loginBtn.innerText = "Sincronizando...";
+    loginBtn.disabled = true;
+
+    try {
+        // INTENTAR BUSCAR EN LA NUBE PRIMERO
+        const docRef = window.doc(window.db_nube, "usuarios", passInput);
+        const docSnap = await window.getDoc(docRef);
+
+        if (docSnap.exists()) {
+            // SI EXISTE EN LA NUBE, TRAEMOS LOS DATOS
+            const datosNube = docSnap.data();
+            db = datosNube.datos;
+            config.pass = passInput;
+            // Guardamos localmente para que la próxima vez sea más rápido
+            localStorage.setItem('sia_total_v7', JSON.stringify(db));
+            localStorage.setItem('sia_config_v7', JSON.stringify(config));
+            
+            entrarAlSistema();
+        } else if (passInput === config.pass) {
+            // SI NO ESTÁ EN LA NUBE PERO COINCIDE CON LO LOCAL (PC ORIGINAL)
+            entrarAlSistema();
+        } else {
+            alert("Contraseña incorrecta o no existe en la nube.");
         }
+    } catch (e) {
+        console.error(e);
+        // Si falla el internet, intentar validación local
+        if (passInput === config.pass) {
+            entrarAlSistema();
+        } else {
+            alert("Error de conexión y no hay datos locales.");
+        }
+    } finally {
+        loginBtn.innerText = "Entrar al Sistema";
+        loginBtn.disabled = false;
     }
+}
 
-    // Luego sigue tu lógica normal de validación
-    if (passInput === config.pass) {
-        document.getElementById('login-screen').classList.remove('active');
-        document.getElementById('main-panel').classList.add('active');
-        updateGradoSelect();
-    } else {
-        alert("Contraseña incorrecta");
-    }
+function entrarAlSistema() {
+    document.getElementById('login-screen').classList.remove('active');
+    document.getElementById('main-panel').classList.add('active');
+    updateGradoSelect();
 }
 
    function iniciarProgressBar() {
@@ -1220,23 +1229,22 @@ function guardarAsistencia() {
 }
         
         function cerrarModal() { document.getElementById('modal-alu').classList.add('hidden'); }
-        async function save() { 
-    // 1. Guardado local (lo que ya tenías)
-    localStorage.setItem('sia_total_v7', JSON.stringify(db)); 
-    updateGradoSelect(); 
+       async function save() {
+    // Guardar fecha de última modificación para sincronización
+    db.ultimaModificacion = Date.now();
+    
+    localStorage.setItem('sia_total_v7', JSON.stringify(db));
+    updateGradoSelect();
 
-    // 2. Sincronización con la Nube (Firebase)
-    // Usamos config.pass que es donde guardas la contraseña maestra
     if (config.pass && window.db_nube) {
         try {
-            // "await" hace que el código espere la respuesta de Google
             await window.setDoc(window.doc(window.db_nube, "usuarios", config.pass), {
                 datos: db,
-                fechaGuardado: Date.now()
+                fecha: Date.now()
             });
-            console.log("Sincronización exitosa con Firebase");
-        } catch (error) {
-            console.warn("No hay internet, se guardará en la nube automáticamente al conectar.");
+            console.log("☁️ Sincronizado");
+        } catch (e) {
+            console.error("Error al subir:", e);
         }
     }
 }
