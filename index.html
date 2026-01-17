@@ -398,18 +398,21 @@ section {
     <input type="text" id="reg-respuesta" placeholder="Tu respuesta secreta">
     
     <button onclick="registrarSistema()" class="btn btn-primary" style="width:100%; margin-top:15px;">Finalizar Configuración</button>
-</section>
+</section>	
    
     <div id="login-screen">
-        <div class="glass-card" style="width: 90%; max-width: 350px; text-align: center;">
-            <div style="font-size: 3rem;">🔐</div>
-            <h2>Acceso Seguro</h2>
-            <input type="password" id="pass-input" placeholder="Contraseña" style="text-align: center; letter-spacing: 5px; margin-bottom: 15px;">
-            <button onclick="validarAcceso()" class="btn btn-primary" style="width: 100%;">Ingresar</button>
-            <button onclick="modalConfigPass()" style="margin-top: 15px; background: none; border: none; color: var(--primary); font-weight: bold; cursor: pointer; font-size: 0.8rem;">Cambiar Contraseña</button>
-            <button onclick="recuperarClave()" style="margin-top: 10px; background: none; border: none; color: #64748b; cursor: pointer; font-size: 0.75rem; display: block; width: 100%;">¿Olvidaste tu contraseña?</button>
-        </div>
+    <div class="glass-card" style="width: 90%; max-width: 350px; text-align: center;">
+        <div style="font-size: 3rem;">🔐</div>
+        <h2>Acceso Seguro</h2>
+        <input type="password" id="pass-input" placeholder="Contraseña" style="text-align: center; letter-spacing: 5px; margin-bottom: 15px;">
+        <button onclick="validarAcceso()" class="btn btn-primary" style="width: 100%;">Ingresar</button>
+        
+        <button onclick="irARegistro()" style="margin-top: 15px; background: #10b981; color: white; border: none; padding: 10px; border-radius: 8px; font-weight: bold; cursor: pointer; font-size: 0.8rem; width: 100%;">Crear Nueva Contraseña</button>
+        
+        <button onclick="modalConfigPass()" style="margin-top: 15px; background: none; border: none; color: var(--primary); font-weight: bold; cursor: pointer; font-size: 0.8rem;">Cambiar Contraseña</button>
+        <button onclick="recuperarClave()" style="margin-top: 10px; background: none; border: none; color: #64748b; cursor: pointer; font-size: 0.75rem; display: block; width: 100%;">¿Olvidaste tu contraseña?</button>
     </div>
+</div>
 
    <div id="splash-screen" class="hidden">
     <div class="loader-content">
@@ -651,26 +654,33 @@ async function cargarDatosDesdeNube() {
     }
 }
 		// --- AL CARGAR LA PÁGINA ---
+// --- LÓGICA DE INICIO MODIFICADA ---
 window.onload = function() {
-    // Verificamos si ya existe una configuración
-    const configGuardada = localStorage.getItem('sia_config_v7');
+    // Siempre mostramos el Login primero ahora
+    document.getElementById('login-screen').classList.remove('hidden');
     
-    if (!configGuardada) {
-        // ES LA PRIMERA VEZ: Ir a registro
-        show('view-registro');
-        document.getElementById('login-screen').classList.add('hidden');
-    } else {
-        // YA EXISTE: Cargar configuración y mostrar login normal
+    // Verificamos si ya existe configuración para cargarla en memoria
+    const configGuardada = localStorage.getItem('sia_config_v7');
+    if (configGuardada) {
         config = JSON.parse(configGuardada);
     }
 };
 
-function registrarSistema() {
-    // 1. Validar que no exista ya una clave
+// Función para el nuevo botón
+function irARegistro() {
+    // Verificamos si ya existe una clave para evitar duplicados accidentales
     if(localStorage.getItem('sia_config_v7')) {
-        return alert("⚠️ Esta PC ya tiene una contraseña creada. Por seguridad, no puedes crear otra.");
+        const confirmar = confirm("Ya existe una contraseña en este equipo. ¿Deseas crear una nueva? (Esto no borrará tus datos, pero cambiará la llave de acceso)");
+        if(!confirmar) return;
     }
+    
+    // Ocultamos login y mostramos registro
+    document.getElementById('login-screen').classList.add('hidden');
+    show('view-registro');
+}
 
+// Ajuste en registrarSistema para que al finalizar vuelva al Login
+function registrarSistema() {
     const p1 = document.getElementById('reg-pass').value;
     const p2 = document.getElementById('reg-pass-confirm').value;
     const resp = document.getElementById('reg-respuesta').value.trim().toLowerCase();
@@ -679,7 +689,6 @@ function registrarSistema() {
     if(p1 !== p2) return alert("Las contraseñas no coinciden");
     if(!resp) return alert("Debes escribir una respuesta de recuperación");
 
-    // 2. Guardar configuración inicial
     config = {
         pass: p1,
         pregunta: document.getElementById('reg-pregunta').value,
@@ -687,8 +696,11 @@ function registrarSistema() {
     };
     
     localStorage.setItem('sia_config_v7', JSON.stringify(config));
-    alert("✅ ¡No olvidar su contraseña, y la pregunta de recuperacion de contraseña.");
-    location.reload(); // Reiniciar para ir al Login
+    alert("✅ Configuración guardada exitosamente.");
+    
+    // Volver al login de forma fluida
+    document.getElementById('view-registro').classList.add('hidden');
+    document.getElementById('login-screen').classList.remove('hidden');
 }
 
 function recuperarClave() {
@@ -1561,4 +1573,5 @@ setTimeout(mostrarRecordatorioRespaldo, 30000);
 </body>
 
 </html>
+
 
